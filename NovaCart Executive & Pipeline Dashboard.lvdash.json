@@ -1,0 +1,1333 @@
+{
+  "datasets": [
+    {
+      "name": "51b52f5c",
+      "displayName": "orders_information",
+      "config": {
+        "version": "1.1",
+        "source": "datatocrunch_novacart_adb.gold_schema.orders_information",
+        "dimensions": [
+          {
+            "expr": "source.*"
+          }
+        ],
+        "measures": [
+          {
+            "name": "count",
+            "expr": "COUNT(*)",
+            "comment": "Represents the total number of rows in the dataset. Use this measure to count all",
+            "displayName": "Count"
+          }
+        ]
+      }
+    },
+    {
+      "name": "executive_business_view",
+      "displayName": "executive_business_view",
+      "config": {
+        "version": "1.1",
+        "source": "datatocrunch_novacart_adb.gold_schema.orders_information",
+        "dimensions": [
+          {
+            "expr": "source.*"
+          }
+        ],
+        "measures": [
+          {
+            "name": "count",
+            "expr": "COUNT(*)",
+            "displayName": "Count"
+          },
+          {
+            "name": "total_revenue",
+            "expr": "SUM(CASE WHEN COALESCE(payment_completion_ratio, 0) >= 1 THEN COALESCE(paid_amount, order_amount) ELSE 0 END)",
+            "displayName": "Total Revenue",
+            "format": {
+              "type": "currency",
+              "currencyCode": "USD",
+              "decimalPlaces": {
+                "type": "exact",
+                "places": 2.0
+              }
+            }
+          },
+          {
+            "name": "average_order_value",
+            "expr": "AVG(CASE WHEN COALESCE(payment_completion_ratio, 0) >= 1 THEN COALESCE(paid_amount, order_amount) END)",
+            "displayName": "Average Order Value",
+            "format": {
+              "type": "currency",
+              "currencyCode": "USD",
+              "decimalPlaces": {
+                "type": "exact",
+                "places": 2.0
+              }
+            }
+          },
+          {
+            "name": "completed_orders",
+            "expr": "COUNT(DISTINCT CASE WHEN COALESCE(payment_completion_ratio, 0) >= 1 THEN order_id END)",
+            "displayName": "Completed Orders"
+          },
+          {
+            "name": "payment_success_rate",
+            "expr": "AVG(LEAST(1.0, GREATEST(0.0, COALESCE(payment_completion_ratio, CASE WHEN LOWER(COALESCE(payment_status, '')) IN ('success', 'successful', 'paid', 'completed') THEN 1.0 WHEN LOWER(COALESCE(payment_status, '')) IN ('failed', 'failure', 'pending', 'cancelled', 'canceled', 'declined') THEN 0.0 ELSE NULL END))))",
+            "displayName": "Payment Success Rate",
+            "format": {
+              "type": "percentage",
+              "decimalPlaces": {
+                "type": "exact",
+                "places": 2.0
+              }
+            }
+          },
+          {
+            "name": "total_orders",
+            "expr": "COUNT(DISTINCT order_id)",
+            "displayName": "Total Orders"
+          },
+          {
+            "name": "total_paid_amount",
+            "expr": "SUM(COALESCE(paid_amount, 0))",
+            "displayName": "Total Paid Amount",
+            "format": {
+              "type": "currency",
+              "currencyCode": "USD",
+              "decimalPlaces": {
+                "type": "exact",
+                "places": 2.0
+              }
+            }
+          },
+          {
+            "name": "gross_merchandise_value",
+            "expr": "SUM(COALESCE(order_amount, 0))",
+            "displayName": "Gross Merchandise Value",
+            "format": {
+              "type": "currency",
+              "currencyCode": "USD",
+              "decimalPlaces": {
+                "type": "exact",
+                "places": 2.0
+              }
+            }
+          },
+          {
+            "name": "avg_payment_completion_ratio",
+            "expr": "AVG(LEAST(1.0, GREATEST(0.0, COALESCE(payment_completion_ratio, CASE WHEN LOWER(COALESCE(payment_status, '')) IN ('success', 'successful', 'paid', 'completed') THEN 1.0 WHEN LOWER(COALESCE(payment_status, '')) IN ('failed', 'failure', 'pending', 'cancelled', 'canceled', 'declined') THEN 0.0 ELSE NULL END))))",
+            "displayName": "Avg Payment Completion Ratio",
+            "format": {
+              "type": "percentage",
+              "decimalPlaces": {
+                "type": "exact",
+                "places": 2.0
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "pipeline_processing_health",
+      "displayName": "pipeline_processing_health",
+      "config": {
+        "version": "1.1",
+        "source": "datatocrunch_novacart_adb.silver_schema.processing_control",
+        "dimensions": [
+          {
+            "expr": "source.*"
+          }
+        ],
+        "measures": [
+          {
+            "name": "count",
+            "expr": "COUNT(*)",
+            "displayName": "Count"
+          },
+          {
+            "name": "rows_merged_total",
+            "expr": "SUM(COALESCE(rows_merged, 0))",
+            "displayName": "Rows Merged"
+          },
+          {
+            "name": "latest_processed_ts",
+            "expr": "MAX(last_processed_bronze_ingested_at)",
+            "displayName": "Latest Processed Timestamp"
+          }
+        ]
+      }
+    },
+    {
+      "name": "quarantine_errors",
+      "displayName": "quarantine_errors",
+      "queryLines": [
+        "SELECT\n",
+        "  error_flag,\n",
+        "  COUNT(*) AS error_count\n",
+        "FROM\n",
+        "  (\n",
+        "    SELECT\n",
+        "      'to_be_verified_by_orders_team' AS error_flag\n",
+        "    FROM\n",
+        "      datatocrunch_novacart_adb.silver_schema.orders_quarantine\n",
+        "    WHERE\n",
+        "      COALESCE(\n",
+        "        TRY_CAST(to_be_verified_by_orders_team AS BOOLEAN),\n",
+        "        LOWER(CAST(to_be_verified_by_orders_team AS STRING)) NOT IN (\n",
+        "          'false', '0', 'no', 'n', 'valid', 'ok', 'passed', ''\n",
+        "        )\n",
+        "      )\n",
+        "    UNION ALL\n",
+        "    SELECT\n",
+        "      'check_order_amount' AS error_flag\n",
+        "    FROM\n",
+        "      datatocrunch_novacart_adb.silver_schema.orders_quarantine\n",
+        "    WHERE\n",
+        "      COALESCE(\n",
+        "        TRY_CAST(check_order_amount AS BOOLEAN),\n",
+        "        LOWER(CAST(check_order_amount AS STRING)) NOT IN (\n",
+        "          'false', '0', 'no', 'n', 'valid', 'valid_amount', 'ok', 'passed', ''\n",
+        "        )\n",
+        "      )\n",
+        "    UNION ALL\n",
+        "    SELECT\n",
+        "      'to_be_verified_by_products_team' AS error_flag\n",
+        "    FROM\n",
+        "      datatocrunch_novacart_adb.silver_schema.products_quarantine\n",
+        "    WHERE\n",
+        "      COALESCE(\n",
+        "        TRY_CAST(to_be_verified_by_products_team AS BOOLEAN),\n",
+        "        LOWER(CAST(to_be_verified_by_products_team AS STRING)) NOT IN (\n",
+        "          'false', '0', 'no', 'n', 'valid', 'ok', 'passed', ''\n",
+        "        )\n",
+        "      )\n",
+        "    UNION ALL\n",
+        "    SELECT\n",
+        "      'check_product_price' AS error_flag\n",
+        "    FROM\n",
+        "      datatocrunch_novacart_adb.silver_schema.products_quarantine\n",
+        "    WHERE\n",
+        "      COALESCE(\n",
+        "        TRY_CAST(check_product_price AS BOOLEAN),\n",
+        "        LOWER(CAST(check_product_price AS STRING)) NOT IN (\n",
+        "          'false', '0', 'no', 'n', 'valid', 'valid_price', 'ok', 'passed', ''\n",
+        "        )\n",
+        "      )\n",
+        "    UNION ALL\n",
+        "    SELECT\n",
+        "      'to_be_verified_by_payments_team' AS error_flag\n",
+        "    FROM\n",
+        "      datatocrunch_novacart_adb.silver_schema.payments_quarantine\n",
+        "    WHERE\n",
+        "      COALESCE(\n",
+        "        TRY_CAST(to_be_verified_by_payments_team AS BOOLEAN),\n",
+        "        LOWER(CAST(to_be_verified_by_payments_team AS STRING)) NOT IN (\n",
+        "          'false', '0', 'no', 'n', 'valid', 'ok', 'passed', ''\n",
+        "        )\n",
+        "      )\n",
+        "    UNION ALL\n",
+        "    SELECT\n",
+        "      'check_paid_amount' AS error_flag\n",
+        "    FROM\n",
+        "      datatocrunch_novacart_adb.silver_schema.payments_quarantine\n",
+        "    WHERE\n",
+        "      COALESCE(\n",
+        "        TRY_CAST(check_paid_amount AS BOOLEAN),\n",
+        "        LOWER(CAST(check_paid_amount AS STRING)) NOT IN (\n",
+        "          'false', '0', 'no', 'n', 'valid', 'valid_amount', 'ok', 'passed', ''\n",
+        "        )\n",
+        "      )\n",
+        "  ) flagged\n",
+        "GROUP BY\n",
+        "  error_flag"
+      ]
+    },
+    {
+      "name": "quarantine_counts",
+      "displayName": "quarantine_counts",
+      "queryLines": [
+        "SELECT\n",
+        "  'orders' AS entity_name,\n",
+        "  COUNT(*) AS quarantine_records\n",
+        "FROM\n",
+        "  datatocrunch_novacart_adb.silver_schema.orders_quarantine\n",
+        "UNION ALL\n",
+        "SELECT\n",
+        "  'products' AS entity_name,\n",
+        "  COUNT(*) AS quarantine_records\n",
+        "FROM\n",
+        "  datatocrunch_novacart_adb.silver_schema.products_quarantine\n",
+        "UNION ALL\n",
+        "SELECT\n",
+        "  'payments' AS entity_name,\n",
+        "  COUNT(*) AS quarantine_records\n",
+        "FROM\n",
+        "  datatocrunch_novacart_adb.silver_schema.payments_quarantine"
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "name": "5d5f56fc",
+      "displayName": "Executive Business View",
+      "layout": [
+        {
+          "widget": {
+            "name": "total_revenue_kpi",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "executive_business_view",
+                  "fields": [
+                    {
+                      "name": "measure(total_revenue)",
+                      "expression": "MEASURE(`total_revenue`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Total Revenue",
+                "showTitle": true
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "measure(total_revenue)",
+                  "rowNumber": 0
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 2,
+            "width": 4,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "average_order_value_kpi",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "executive_business_view",
+                  "fields": [
+                    {
+                      "name": "measure(average_order_value)",
+                      "expression": "MEASURE(`average_order_value`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Average Order Value",
+                "showTitle": true
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "measure(average_order_value)",
+                  "rowNumber": 0
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 8,
+            "y": 5,
+            "width": 4,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "completed_orders_kpi",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "executive_business_view",
+                  "fields": [
+                    {
+                      "name": "measure(completed_orders)",
+                      "expression": "MEASURE(`completed_orders`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Completed Orders",
+                "showTitle": true
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "measure(completed_orders)",
+                  "rowNumber": 0
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 5,
+            "width": 4,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "order_status_breakdown",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "executive_business_view",
+                  "fields": [
+                    {
+                      "name": "order_status",
+                      "expression": "`order_status`"
+                    },
+                    {
+                      "name": "measure(count)",
+                      "expression": "MEASURE(`count`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "frame": {
+                "title": "Order Status Breakdown",
+                "showTitle": true
+              },
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "order_status",
+                  "displayName": "order_status",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "fieldName": "measure(count)",
+                  "displayName": "Count",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "order_status",
+                  "displayName": "order_status",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 8,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "category_performance",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "executive_business_view",
+                  "fields": [
+                    {
+                      "name": "measure(total_revenue)",
+                      "expression": "MEASURE(`total_revenue`)"
+                    },
+                    {
+                      "name": "category",
+                      "expression": "`category`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "frame": {
+                "title": "Category Performance",
+                "showTitle": true
+              },
+              "widgetType": "pie",
+              "encodings": {
+                "angle": {
+                  "fieldName": "measure(total_revenue)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Total Revenue"
+                },
+                "color": {
+                  "fieldName": "category",
+                  "displayName": "category",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 8,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "payment_success_rate_trend",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "executive_business_view",
+                  "fields": [
+                    {
+                      "name": "monthly(order_date)",
+                      "expression": "DATE_TRUNC(\"MONTH\", `order_date`)"
+                    },
+                    {
+                      "name": "measure(payment_success_rate)",
+                      "expression": "MEASURE(`payment_success_rate`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "frame": {
+                "title": "Payment Success Rate Trend",
+                "showTitle": true
+              },
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "monthly(order_date)",
+                  "displayName": "Order Month",
+                  "scale": {
+                    "type": "temporal"
+                  }
+                },
+                "y": {
+                  "fieldName": "measure(payment_success_rate)",
+                  "displayName": "Payment Success Rate",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 14,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "total_orders_kpi",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "executive_business_view",
+                  "fields": [
+                    {
+                      "name": "measure(total_orders)",
+                      "expression": "MEASURE(`total_orders`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Total Orders",
+                "showTitle": true
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "measure(total_orders)",
+                  "rowNumber": 0
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 5,
+            "width": 4,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "total_paid_amount_kpi",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "executive_business_view",
+                  "fields": [
+                    {
+                      "name": "measure(total_paid_amount)",
+                      "expression": "MEASURE(`total_paid_amount`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Total Paid Amount",
+                "showTitle": true
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "measure(total_paid_amount)",
+                  "rowNumber": 0
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 2,
+            "width": 4,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "gross_merchandise_value_kpi",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "executive_business_view",
+                  "fields": [
+                    {
+                      "name": "measure(gross_merchandise_value)",
+                      "expression": "MEASURE(`gross_merchandise_value`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Gross Merchandise Value",
+                "showTitle": true
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "measure(gross_merchandise_value)",
+                  "rowNumber": 0
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 8,
+            "y": 2,
+            "width": 4,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "avg_payment_completion_ratio_by_category",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "executive_business_view",
+                  "fields": [
+                    {
+                      "name": "measure(avg_payment_completion_ratio)",
+                      "expression": "MEASURE(`avg_payment_completion_ratio`)"
+                    },
+                    {
+                      "name": "category",
+                      "expression": "`category`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "frame": {
+                "title": "Avg Payment Completion Ratio per Category",
+                "showTitle": true
+              },
+              "widgetType": "pie",
+              "encodings": {
+                "angle": {
+                  "fieldName": "measure(avg_payment_completion_ratio)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "avg_payment_completion_ratio"
+                },
+                "color": {
+                  "fieldName": "category",
+                  "displayName": "category",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 14,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "2a810993",
+            "multilineTextboxSpec": {
+              "lines": [
+                "<span style=\"text-align:center;display:block\"><span style=\"font-family: Times New Roman;font-size: 48px;line-height: 1.5;\">Novacart Dashboard</span></span>"
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 12,
+            "height": 2
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1"
+    },
+    {
+      "name": "global_filters",
+      "displayName": "Global Filters",
+      "layout": [
+        {
+          "widget": {
+            "name": "order_date_filter",
+            "queries": [
+              {
+                "name": "dashboards/01f1960fa6dc165eb32db53e98df9cbe/datasets/01f1961242ef105096e7c408526811f4_order_date",
+                "query": {
+                  "datasetName": "executive_business_view",
+                  "fields": [
+                    {
+                      "name": "order_date",
+                      "expression": "`order_date`"
+                    },
+                    {
+                      "name": "order_date_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Order Date",
+                "showTitle": true
+              },
+              "widgetType": "filter-date-range-picker",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "order_date",
+                    "queryName": "dashboards/01f1960fa6dc165eb32db53e98df9cbe/datasets/01f1961242ef105096e7c408526811f4_order_date"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "category_filter",
+            "queries": [
+              {
+                "name": "dashboards/01f1960fa6dc165eb32db53e98df9cbe/datasets/01f1961242ef105096e7c408526811f4_category",
+                "query": {
+                  "datasetName": "executive_business_view",
+                  "fields": [
+                    {
+                      "name": "category",
+                      "expression": "`category`"
+                    },
+                    {
+                      "name": "category_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Category",
+                "showTitle": true
+              },
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "category",
+                    "queryName": "dashboards/01f1960fa6dc165eb32db53e98df9cbe/datasets/01f1961242ef105096e7c408526811f4_category"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 0,
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "order_status_filter",
+            "queries": [
+              {
+                "name": "dashboards/01f1960fa6dc165eb32db53e98df9cbe/datasets/01f1961242ef105096e7c408526811f4_order_status",
+                "query": {
+                  "datasetName": "executive_business_view",
+                  "fields": [
+                    {
+                      "name": "order_status",
+                      "expression": "`order_status`"
+                    },
+                    {
+                      "name": "order_status_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Order Status",
+                "showTitle": true
+              },
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "order_status",
+                    "queryName": "dashboards/01f1960fa6dc165eb32db53e98df9cbe/datasets/01f1961242ef105096e7c408526811f4_order_status"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 0,
+            "width": 3,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "payment_status_filter",
+            "queries": [
+              {
+                "name": "dashboards/01f1960fa6dc165eb32db53e98df9cbe/datasets/01f1961242ef105096e7c408526811f4_payment_status",
+                "query": {
+                  "datasetName": "executive_business_view",
+                  "fields": [
+                    {
+                      "name": "payment_status",
+                      "expression": "`payment_status`"
+                    },
+                    {
+                      "name": "payment_status_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Payment Status",
+                "showTitle": true
+              },
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "payment_status",
+                    "queryName": "dashboards/01f1960fa6dc165eb32db53e98df9cbe/datasets/01f1961242ef105096e7c408526811f4_payment_status"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 9,
+            "y": 0,
+            "width": 3,
+            "height": 2
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_GLOBAL_FILTERS",
+      "layoutVersion": "GRID_V1"
+    },
+    {
+      "name": "ad47e3dd",
+      "displayName": "Data Quality & Pipeline Health",
+      "layout": [
+        {
+          "widget": {
+            "name": "daily_ingestion_volume",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "pipeline_processing_health",
+                  "fields": [
+                    {
+                      "name": "entity_name",
+                      "expression": "`entity_name`"
+                    },
+                    {
+                      "name": "daily(last_processed_bronze_ingested_at)",
+                      "expression": "DATE_TRUNC(\"DAY\", `last_processed_bronze_ingested_at`)"
+                    },
+                    {
+                      "name": "sum(rows_merged)",
+                      "expression": "SUM(`rows_merged`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "frame": {
+                "title": "Daily Ingestion Volume",
+                "showTitle": true
+              },
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "daily(last_processed_bronze_ingested_at)",
+                  "displayName": "Processing Day",
+                  "scale": {
+                    "type": "temporal"
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(rows_merged)",
+                  "displayName": "Rows Merged",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "entity_name",
+                  "displayName": "Entity",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 12,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "quarantine_catch_rate",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "quarantine_counts",
+                  "fields": [
+                    {
+                      "name": "entity_name",
+                      "expression": "`entity_name`"
+                    },
+                    {
+                      "name": "quarantine_records",
+                      "expression": "`quarantine_records`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Quarantine Catch Rate",
+                "showTitle": true
+              },
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "entity_name"
+                  },
+                  {
+                    "fieldName": "quarantine_records"
+                  }
+                ]
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 6,
+            "width": 4,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "top_data_quality_errors",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "quarantine_errors",
+                  "fields": [
+                    {
+                      "name": "error_flag",
+                      "expression": "`error_flag`"
+                    },
+                    {
+                      "name": "sum(error_count)",
+                      "expression": "SUM(`error_count`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "frame": {
+                "title": "Top Data Quality Errors",
+                "showTitle": true
+              },
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "error_flag",
+                  "displayName": "error_flag",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(error_count)",
+                  "displayName": "error_count",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "error_flag",
+                  "displayName": "error_flag",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 6,
+            "width": 8,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "pipeline_status",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "pipeline_processing_health",
+                  "fields": [
+                    {
+                      "name": "entity_name",
+                      "expression": "`entity_name`"
+                    },
+                    {
+                      "name": "run_status",
+                      "expression": "`run_status`"
+                    },
+                    {
+                      "name": "last_processed_bronze_ingested_at",
+                      "expression": "`last_processed_bronze_ingested_at`"
+                    },
+                    {
+                      "name": "rows_merged",
+                      "expression": "`rows_merged`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Pipeline Status",
+                "showTitle": true
+              },
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "entity_name"
+                  },
+                  {
+                    "fieldName": "run_status"
+                  },
+                  {
+                    "fieldName": "last_processed_bronze_ingested_at"
+                  },
+                  {
+                    "fieldName": "rows_merged"
+                  }
+                ]
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 11,
+            "width": 12,
+            "height": 5
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1"
+    }
+  ],
+  "uiSettings": {
+    "theme": {
+      "canvasBackgroundColor": {
+        "light": "#E6E9EA",
+        "dark": "#1E2931"
+      },
+      "widgetBackgroundColor": {
+        "light": "#FFFFFF",
+        "dark": "#15181C"
+      },
+      "widgetBorderColor": {
+        "light": "#F3F5F6",
+        "dark": "#21292F"
+      },
+      "fontColor": {
+        "light": "#1A2127",
+        "dark": "#EEF0F2"
+      },
+      "selectionColor": {
+        "light": "#0E7AB9",
+        "dark": "#41ADEC"
+      },
+      "visualizationColors": [
+        "#A6CEE3",
+        "#1F78B4",
+        "#B2DF8A",
+        "#33A02C",
+        "#FB9A99",
+        "#E31A1C",
+        "#FDBF6F",
+        "#FF7F00",
+        "#CAB2D6",
+        "#6A3D9A",
+        "#FFFF99",
+        "#B15928"
+      ],
+      "widgetHeaderAlignment": "LEFT",
+      "fontFamily": "Inter",
+      "widgetPadding": 16,
+      "widgetMargin": 8,
+      "widgetCornerRadius": 16,
+      "widgetShadow": 50,
+      "continuousGradient": {
+        "lightMode": {
+          "fromCategoricalIndex": 0
+        },
+        "darkMode": {
+          "fromCategoricalIndex": 0
+        }
+      },
+      "fontSettings": {
+        "base": {
+          "fontFamily": "Inter",
+          "fontColor": {
+            "light": "#1A2127",
+            "dark": "#EEF0F2"
+          },
+          "fontSize": 14,
+          "fontWeight": 400
+        },
+        "widgetTitle": {
+          "fontSize": 16,
+          "fontWeight": 500
+        },
+        "widgetDescription": {
+          "fontSize": 14,
+          "fontWeight": 400
+        },
+        "fieldTitle": {
+          "textCase": "TEXT_CASE_UPPERCASE",
+          "fontColor": {
+            "light": "#31373D",
+            "dark": "#D6D8DA"
+          },
+          "fontSize": 13,
+          "fontWeight": 400
+        },
+        "fieldValue": {
+          "fontColor": {
+            "light": "#31373D",
+            "dark": "#D6D8DA"
+          },
+          "fontSize": 13,
+          "fontWeight": 400
+        }
+      },
+      "gridLineColor": {
+        "light": "#D6D7D8",
+        "dark": "#3C3E42"
+      },
+      "axisLineColor": {
+        "light": "#B0B4B6",
+        "dark": "#555E64"
+      }
+    },
+    "applyModeEnabled": false
+  }
+}
